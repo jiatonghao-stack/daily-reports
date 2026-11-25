@@ -8,7 +8,7 @@
   2. 去重并按热度/时效筛选高价值候选池
   3. 调用大模型 API（自动识别 GEMINI_API_KEY / DEEPSEEK_API_KEY / DASHSCOPE_API_KEY / OPENAI_API_KEY）
      梳理最热 Top 20、重磅大事件、重点标注、最新 AI 技术突破及后续发展趋势研判，保留真实原文链接
-  4. 输出到根目录：`YYYY-MM-DD-AI早报.md` 与 `最新早报.md`
+  4. 输出到子目录：`AI新闻/YYYY-MM-DD-AI早报.md` 与 `AI新闻/最新早报.md`（便于根目录后续扩展其他品类报告）
 """
 from __future__ import annotations
 
@@ -521,8 +521,10 @@ def main() -> int:
     yesterday_date = (now_bj - dt.timedelta(days=1)).strftime("%Y-%m-%d")
 
     repo_root = Path(__file__).resolve().parent.parent
-    dated_file = repo_root / f"{report_date}-AI早报.md"
-    latest_file = repo_root / "最新早报.md"
+    ai_news_dir = repo_root / "AI新闻"
+    ai_news_dir.mkdir(parents=True, exist_ok=True)
+    dated_file = ai_news_dir / f"{report_date}-AI早报.md"
+    latest_file = ai_news_dir / "最新早报.md"
 
     print(f"[INFO] 正在搜集 {yesterday_date} ~ {report_date} 全球与国内 AI 圈动态...")
     candidates = collect_candidates(now_bj)

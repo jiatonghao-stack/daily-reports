@@ -41,7 +41,7 @@ jobs:
         run: |
           git config user.name "AI-Daily-Report-Bot"
           git config user.email "actions@github.com"
-          git add -A "*.md"
+          git add -A "AI新闻/*.md"
           if git diff --staged --quiet; then
             echo "今日早报无变化，跳过提交。"
           else
