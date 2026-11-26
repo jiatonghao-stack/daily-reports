@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .env
 .automation/sync.log
+.automation/deploy_key
+.automation/deploy_key.pub
