@@ -375,18 +375,42 @@ def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str], timeo
 def call_gemini(prompt: str, api_key: str) -> str:
     preferred_model = os.environ.get("GEMINI_MODEL", "").strip()
     models_to_try = [m for m in [preferred_model, "gemini-2.5-flash", "gemini-2.0-flash"] if m]
+    headers = {"x-goog-api-key": api_key}
+
+    # 自动发现最新可用 Flash 模型作为兜底，防止未来模型名称迭代退役
+    try:
+        req = urllib.request.Request(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            headers={"User-Agent": USER_AGENT, "x-goog-api-key": api_key},
+        )
+        with urllib.request.urlopen(req, timeout=15, context=_ssl_context()) as resp:
+            catalog = json.loads(resp.read().decode("utf-8")).get("models", [])
+        discovered = [
+            m["name"].split("/")[-1]
+            for m in catalog
+            if "generateContent" in m.get("supportedGenerationMethods", [])
+            and "flash" in m.get("name", "").lower()
+            and "tts" not in m.get("name", "").lower()
+            and "image" not in m.get("name", "").lower()
+        ]
+        for dm in reversed(discovered):
+            if dm not in models_to_try:
+                models_to_try.append(dm)
+    except Exception as exc:
+        print(f"[WARN] 模型列表自动探测跳过: {exc}", file=sys.stderr)
+
     last_err: Exception | None = None
     for model in models_to_try:
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{urllib.parse.quote(model)}:generateContent?key={urllib.parse.quote(api_key)}"
+            f"{urllib.parse.quote(model)}:generateContent"
         )
         payload = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.35, "maxOutputTokens": 8192},
         }
         try:
-            data = _post_json(url, payload, headers={}, timeout=150)
+            data = _post_json(url, payload, headers=headers, timeout=150)
             parts = data["candidates"][0]["content"]["parts"]
             text = "".join(p.get("text", "") for p in parts).strip()
             if text:
