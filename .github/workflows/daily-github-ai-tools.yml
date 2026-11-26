@@ -1,0 +1,53 @@
+name: 每日 GitHub AI 工具与 Skill 早报自动生成
+
+on:
+  # UTC 23:58 = 北京时间每天早上 07:58 启动（与 07:48 AI 新闻、07:53 国内外新闻错峰 5 分钟，确保 08:30 前全部就绪）
+  schedule:
+    - cron: '58 23 * * *'
+  # 支持在 GitHub Actions 页面随时一键手动触发测试
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-daily-github-ai-tools-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出仓库最新内容
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 设置 Python 3.12 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 挖掘 GitHub 热门 AI Skill 与实用工具并生成 Top 20 早报
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+        run: python3 .automation/generate_github_ai_tools_report.py
+
+      - name: 提交并推送今日 AI 工具与 Skill 早报到仓库
+        run: |
+          git config user.name "Daily-Report-Bot"
+          git config user.email "actions@github.com"
+          git add -A "AI工具与Skill/*.md"
+          if git diff --staged --quiet; then
+            echo "今日 AI 工具早报无变化，跳过提交。"
+          else
+            REPORT_DATE=$(TZ=Asia/Shanghai date +%Y-%m-%d)
+            git commit -m "🛠️ 自动生成 ${REPORT_DATE} GitHub AI 工具与 Skill 早报"
+            git pull --rebase origin main || true
+            git push origin HEAD:main
+          fi
