@@ -374,7 +374,7 @@ def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str], timeo
 
 def call_gemini(prompt: str, api_key: str) -> str:
     preferred_model = os.environ.get("GEMINI_MODEL", "").strip()
-    models_to_try = [m for m in [preferred_model, "gemini-2.5-flash", "gemini-2.0-flash"] if m]
+    models_to_try = [m for m in [preferred_model, "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash"] if m]
     headers = {"x-goog-api-key": api_key}
 
     # 自动发现最新可用 Flash 模型作为兜底，防止未来模型名称迭代退役
@@ -407,15 +407,28 @@ def call_gemini(prompt: str, api_key: str) -> str:
         )
         payload = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.35, "maxOutputTokens": 8192},
+            "generationConfig": {
+                "temperature": 0.35,
+                "maxOutputTokens": 32768,
+                "thinkingConfig": {"thinkingBudget": 1024},
+            },
         }
         try:
-            data = _post_json(url, payload, headers=headers, timeout=150)
+            try:
+                data = _post_json(url, payload, headers=headers, timeout=150)
+            except urllib.error.HTTPError as http_err:
+                if http_err.code == 400:
+                    payload["generationConfig"] = {"temperature": 0.35, "maxOutputTokens": 16384}
+                    data = _post_json(url, payload, headers=headers, timeout=150)
+                else:
+                    raise
             parts = data["candidates"][0]["content"]["parts"]
-            text = "".join(p.get("text", "") for p in parts).strip()
-            if text:
+            text = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
+            if text and "20." in text:
                 print(f"[INFO] 已通过 Gemini ({model}) 完成深度总结。")
                 return text
+            if text:
+                print(f"[WARN] Gemini ({model}) 输出疑似不完整，尝试备选模型...", file=sys.stderr)
         except Exception as exc:
             last_err = exc
             print(f"[WARN] Gemini 模型 {model} 调用失败，尝试备选: {exc}", file=sys.stderr)
