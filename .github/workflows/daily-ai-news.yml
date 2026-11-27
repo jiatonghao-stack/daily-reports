@@ -1,10 +1,7 @@
 name: 每日 AI 圈早报自动生成
 
 on:
-  # UTC 23:48 = 北京时间每天早上 07:48 启动（避开整点排队高峰，确保 08:30 前准时生成完毕）
-  schedule:
-    - cron: '48 23 * * *'
-  # 支持在 GitHub Actions 页面随时一键手动触发测试
+  # 定时调度已统一合并至 daily-all-reports.yml，此处保留手动单独触发入口
   workflow_dispatch:
 
 permissions:

@@ -1,10 +1,7 @@
 name: 每日国内外新闻早报自动生成
 
 on:
-  # UTC 23:53 = 北京时间每天早上 07:53 启动（与 07:48 的 AI 早报错峰 5 分钟，避免 API 并发限流，确保 08:30 前全部就绪）
-  schedule:
-    - cron: '53 23 * * *'
-  # 支持在 GitHub Actions 页面随时一键手动触发测试
+  # 定时调度已统一合并至 daily-all-reports.yml，此处保留手动单独触发入口
   workflow_dispatch:
 
 permissions:
