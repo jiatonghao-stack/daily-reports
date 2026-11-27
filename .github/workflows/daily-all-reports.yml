@@ -1,0 +1,81 @@
+name: 每日早报总调度（三份连跑+自动补漏）
+
+on:
+  schedule:
+    # 北京时间 07:17 主运行（避开 UTC 零点全球拥堵高峰）
+    - cron: '17 23 * * *'
+    # 北京时间 07:47 自动巡检补漏（若 07:17 已全部生成则 2 秒跳过）
+    - cron: '47 23 * * *'
+    # 北京时间 08:12 终极兜底巡检（确保 08:30 前 100% 全部就绪）
+    - cron: '12 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-all-daily-reports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: 检出仓库最新内容
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 设置 Python 3.12 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 按需生成今日三份早报（幂等防重）
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+        run: |
+          REPORT_DATE=$(TZ=Asia/Shanghai date +%Y-%m-%d)
+          echo "当前北京时间日期: ${REPORT_DATE}"
+
+          if [ ! -f "AI新闻/${REPORT_DATE}-AI早报.md" ]; then
+            echo ">>> 开始生成 ${REPORT_DATE} AI 圈早报..."
+            python3 .automation/generate_daily_report.py || echo "[WARN] AI 早报本次运行未成功，待下一轮补跑"
+            sleep 5
+          else
+            echo ">>> [已存在] AI新闻/${REPORT_DATE}-AI早报.md，跳过。"
+          fi
+
+          if [ ! -f "国内外新闻/${REPORT_DATE}-国内外早报.md" ]; then
+            echo ">>> 开始生成 ${REPORT_DATE} 国内外新闻早报..."
+            python3 .automation/generate_world_china_report.py || echo "[WARN] 国内外早报本次运行未成功，待下一轮补跑"
+            sleep 5
+          else
+            echo ">>> [已存在] 国内外新闻/${REPORT_DATE}-国内外早报.md，跳过。"
+          fi
+
+          if [ ! -f "AI工具与Skill/${REPORT_DATE}-AI工具与Skill早报.md" ]; then
+            echo ">>> 开始生成 ${REPORT_DATE} GitHub AI 工具与 Skill 早报..."
+            python3 .automation/generate_github_ai_tools_report.py || echo "[WARN] AI 工具早报本次运行未成功，待下一轮补跑"
+          else
+            echo ">>> [已存在] AI工具与Skill/${REPORT_DATE}-AI工具与Skill早报.md，跳过。"
+          fi
+
+      - name: 提交并推送今日新增早报
+        run: |
+          git config user.name "Daily-Report-Bot"
+          git config user.email "actions@github.com"
+          git add -A "AI新闻/*.md" "国内外新闻/*.md" "AI工具与Skill/*.md"
+          if git diff --staged --quiet; then
+            echo "今日三份早报均已就绪，无需重复提交。"
+          else
+            REPORT_DATE=$(TZ=Asia/Shanghai date +%Y-%m-%d)
+            git commit -m "🗞️ 自动汇总生成 ${REPORT_DATE} 每日早报（AI新闻 / 国内外新闻 / AI工具）"
+            git pull --rebase origin main || true
+            git push origin HEAD:main
+          fi
